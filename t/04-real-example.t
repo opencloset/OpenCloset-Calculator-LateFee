@@ -31,9 +31,9 @@ $order->user_target_date(
     )
 );
 
-is( $calc->_overdue_days( $order, $today ), 5, 'overdue_days' );
+is( $calc->overdue_days( $order, $today ), 5, 'overdue_days' );
 is( $calc->overdue_fee( $order, $today ), 37500, 'overdue_fee' );
-is( $calc->_extension_days( $order, $today ), 0, 'extension_days' );
+is( $calc->extension_days( $order, $today ), 0, 'extension_days' );
 is( $calc->extension_fee( $order, $today ), 0, 'extension_fee' );
 is( $calc->late_fee( $order, $today ), 37500, 'late_fee' );
 
@@ -55,9 +55,9 @@ $order->user_target_date(
     )
 );
 
-is( $calc->_overdue_days( $order, $today ), 0, 'overdue_days' );
+is( $calc->overdue_days( $order, $today ), 0, 'overdue_days' );
 is( $calc->overdue_fee( $order, $today ), 0, 'overdue_fee' );
-is( $calc->_extension_days( $order, $today ), 15, 'extension_days' );
+is( $calc->extension_days( $order, $today ), 15, 'extension_days' );
 is( $calc->extension_fee( $order, $today ), 75000, 'extension_fee' );
 is( $calc->late_fee( $order, $today ), 75000, 'late_fee' );
 
@@ -79,9 +79,9 @@ $order->user_target_date(
     )
 );
 
-is( $calc->_overdue_days( $order, $today ), 8, 'overdue_days' );
+is( $calc->overdue_days( $order, $today ), 8, 'overdue_days' );
 is( $calc->overdue_fee( $order, $today ), 60000, 'overdue_fee' );
-is( $calc->_extension_days( $order, $today ), 1, 'extension_days' );
+is( $calc->extension_days( $order, $today ), 1, 'extension_days' );
 is( $calc->extension_fee( $order, $today ), 5000, 'extension_fee' );
 is( $calc->late_fee( $order, $today ), 65000, 'late_fee' );
 
