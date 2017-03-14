@@ -60,7 +60,9 @@ sub _price {
     return $price;
 }
 
-=head2 _overdue_days( $order )
+=head2 _overdue_days( $order, $today? )
+
+C<$today> means C<return_date>. default is today.
 
 연체일(오늘 - 반납희망일)
 
@@ -131,12 +133,11 @@ sub overdue_fee {
     return $price * 0.3 * $days;
 }
 
-=head2 _extension_days( $order, $today )
+=head2 _extension_days( $order, $today? )
 
 연장일(반납희망일 - 반납예정일)
 
     my $ext_days = $self->_extension_days($order);
-    my $ext_days = $self->_extension_days($order, '2017-03-14T00:00:00');
 
 =cut
 
@@ -193,7 +194,7 @@ sub _extension_days {
     return int( $dur / $DAY_AS_SECONDS );
 }
 
-=head2 extension_fee( $order )
+=head2 extension_fee( $order, $today? )
 
     # 연장비 = 연장일 * 대여비 * 0.2
     my $extension_fee = $calc->extension_fee($order);
