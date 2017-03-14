@@ -15,11 +15,11 @@ OpenCloset::Calculator::LateFee - late_fee, overdue_fee and extension_fee calcul
 =head1 SYNOPSIS
 
     my $calc         = OpenCloset::Calculator::LateFee->new;
-    my $overdue_days = $calc->_overdue_days($order);   # 연체일: 오늘 - 반납희망일
-    my $overdue_fee  = $calc->overdue_fee($order);     # 연체료: 대여비 * 연체일 * 0.3
-    my $ext_days     = $calc->_extension_days($order); # 연장일: 반납희망일 - 반납예정일
-    my $ext_fee      = $calc->extension_fee($order);   # 연장비: 대여비 * 연장일 * 0.2
-    my $late_fee     = $calc->late_fee($order);        # 연장비 + 연체비
+    my $overdue_days = $calc->overdue_days($order);   # 연체일: 오늘 - 반납희망일
+    my $overdue_fee  = $calc->overdue_fee($order);    # 연체료: 대여비 * 연체일 * 0.3
+    my $ext_days     = $calc->extension_days($order); # 연장일: 반납희망일 - 반납예정일
+    my $ext_fee      = $calc->extension_fee($order);  # 연장비: 대여비 * 연장일 * 0.2
+    my $late_fee     = $calc->late_fee($order);       # 연장비 + 연체비
 
 =head1 METHODS
 
@@ -40,13 +40,13 @@ sub new {
     return $self;
 }
 
-=head2 _price( $order )
+=head2 price( $order )
 
-    my $price = $self->_price($order);    # 20000
+    my $price = $self->price($order);    # 20000
 
 =cut
 
-sub _price {
+sub price {
     my ( $self, $order ) = @_;
 
     return 0 unless $order;
@@ -60,18 +60,18 @@ sub _price {
     return $price;
 }
 
-=head2 _overdue_days( $order, $today? )
+=head2 overdue_days( $order, $today? )
 
 C<$today> means C<return_date>. default is today.
 
 연체일(오늘 - 반납희망일)
 
-    my $overdue_days = $self->_overdue_days($order);
-    my $overdue_days = $self->_overdue_days($order, '2017-03-14T00:00:00');
+    my $overdue_days = $self->overdue_days($order);
+    my $overdue_days = $self->overdue_days($order, '2017-03-14T00:00:00');
 
 =cut
 
-sub _overdue_days {
+sub overdue_days {
     my ( $self, $order, $today ) = @_;
     return 0 unless $order;
 
@@ -128,20 +128,20 @@ sub _overdue_days {
 sub overdue_fee {
     my ( $self, $order, $today ) = @_;
 
-    my $price = $self->_price($order);
-    my $days = $self->_overdue_days( $order, $today );
+    my $price = $self->price($order);
+    my $days = $self->overdue_days( $order, $today );
     return $price * 0.3 * $days;
 }
 
-=head2 _extension_days( $order, $today? )
+=head2 extension_days( $order, $today? )
 
 연장일(반납희망일 - 반납예정일)
 
-    my $ext_days = $self->_extension_days($order);
+    my $ext_days = $self->extension_days($order);
 
 =cut
 
-sub _extension_days {
+sub extension_days {
     my ( $self, $order, $today ) = @_;
     return 0 unless $order;
 
@@ -204,8 +204,8 @@ sub _extension_days {
 sub extension_fee {
     my ( $self, $order, $today ) = @_;
 
-    my $price = $self->_price($order);
-    my $days = $self->_extension_days( $order, $today );
+    my $price = $self->price($order);
+    my $days = $self->extension_days( $order, $today );
     return $price * 0.2 * $days;
 }
 
