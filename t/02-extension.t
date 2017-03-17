@@ -9,7 +9,7 @@ use_ok 'OpenCloset::Calculator::LateFee';
 
 my $tz    = 'Asia/Seoul';
 my $today = DateTime->today( time_zone => $tz );
-my $calc  = OpenCloset::Calculator::LateFee->new;
+my $calc  = OpenCloset::Calculator::LateFee->new( ignore_status => 1 );
 my $order = Order->new;
 
 $order->target_date( $today->clone );

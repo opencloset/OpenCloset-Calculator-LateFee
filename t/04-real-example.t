@@ -10,7 +10,7 @@ use OpenCloset::Calculator::LateFee;
 # 연장료: 5_000 per day
 
 my $tz    = 'Asia/Seoul';
-my $calc  = OpenCloset::Calculator::LateFee->new;
+my $calc  = OpenCloset::Calculator::LateFee->new( ignore_status => 1 );
 my $order = Order->new;
 my $today = '2017-03-15T06:00:00';
 

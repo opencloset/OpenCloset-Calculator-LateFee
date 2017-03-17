@@ -6,6 +6,8 @@ use warnings;
 use DateTime;
 use DateTime::Format::Strptime;
 
+use OpenCloset::Constants::Status qw/$RENTAL $RETURNED/;
+
 =encoding utf8
 
 =head1 NAME
@@ -28,6 +30,9 @@ OpenCloset::Calculator::LateFee - late_fee, overdue_fee and extension_fee calcul
     my $calc = OpenCloset::Calculator::LateFee->new;    # default timezone is 'Asia/Seoul'
     my $calc = OpenCloset::Calculator::LateFee->new(timezone => 'Asia/Seoul');
 
+    # Calculate fees only target_date, user_target_date and return_date
+    my $calc = OpenCloset::Calculator::LateFee->new(ignore_status => 1);
+
 =cut
 
 our $DAY_AS_SECONDS = 60 * 60 * 24;
@@ -35,7 +40,11 @@ our $DAY_AS_SECONDS = 60 * 60 * 24;
 sub new {
     my ( $class, %args ) = @_;
 
-    my $self = { timezone => $args{timezone} || 'Asia/Seoul' };
+    my $self = {
+        ignore   => $args{ignore_status},
+        timezone => $args{timezone} || 'Asia/Seoul',
+    };
+
     bless $self, $class;
     return $self;
 }
@@ -75,10 +84,21 @@ sub overdue_days {
     my ( $self, $order, $today ) = @_;
     return 0 unless $order;
 
+    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
+        my $od = $order->order_details( { name => '연체료' }, { rows => 1 } )->single;
+        return 0 unless $od;
+
+        my $desc = $od->desc;
+        my ( $price, $rate, $days ) = split / x /, $desc;
+        $days =~ s/일//;
+        return $days || 0;
+    }
+
     my $target_dt      = $order->target_date;
     my $user_target_dt = $order->user_target_date;
     my $return_dt      = $order->return_date;
 
+    return 0 unless $target_dt;
     return 0 unless $user_target_dt;
 
     unless ($return_dt) {
@@ -128,9 +148,24 @@ sub overdue_days {
 sub overdue_fee {
     my ( $self, $order, $today ) = @_;
 
-    my $price = $self->price($order);
-    my $days = $self->overdue_days( $order, $today );
-    return $price * 0.3 * $days;
+    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
+        my $od = $order->order_details( { name => '연체료' }, { rows => 1 } )->single;
+        return 0 unless $od;
+
+        my $desc = $od->desc;
+        my ( $price, $rate, $days ) = split / x /, $desc;
+        $price =~ s/,//;
+        $price =~ s/원//;
+        $rate =~ s/%//;
+        $rate /= 100;
+        $days =~ s/일//;
+        return $price * $rate * $days || 0;
+    }
+    else {
+        my $price = $self->price($order);
+        my $days = $self->overdue_days( $order, $today );
+        return $price * 0.3 * $days;
+    }
 }
 
 =head2 extension_days( $order, $today? )
@@ -144,6 +179,16 @@ sub overdue_fee {
 sub extension_days {
     my ( $self, $order, $today ) = @_;
     return 0 unless $order;
+
+    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
+        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+        return 0 unless $od;
+
+        my $desc = $od->desc;
+        my ( $price, $rate, $days ) = split / x /, $desc;
+        $days =~ s/일//;
+        return $days || 0;
+    }
 
     my $target_dt      = $order->target_date;
     my $user_target_dt = $order->user_target_date;
@@ -204,9 +249,24 @@ sub extension_days {
 sub extension_fee {
     my ( $self, $order, $today ) = @_;
 
-    my $price = $self->price($order);
-    my $days = $self->extension_days( $order, $today );
-    return $price * 0.2 * $days;
+    if ( $order->status_id == $RETURNED ) {
+        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+        return 0 unless $od;
+
+        my $desc = $od->desc;
+        my ( $price, $rate, $days ) = split / x /, $desc;
+        $price =~ s/,//;
+        $price =~ s/원//;
+        $rate =~ s/%//;
+        $rate /= 100;
+        $days =~ s/일//;
+        return $price * $rate * $days || 0;
+    }
+    else {
+        my $price = $self->price($order);
+        my $days = $self->extension_days( $order, $today );
+        return $price * 0.2 * $days;
+    }
 }
 
 =head2 late_fee( $order, $today? )
