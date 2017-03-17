@@ -41,4 +41,6 @@ sub order_details {
     return @details;
 }
 
+sub status_id { 1 }
+
 1;
