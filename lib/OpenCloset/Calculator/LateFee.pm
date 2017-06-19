@@ -16,7 +16,10 @@ OpenCloset::Calculator::LateFee - late_fee, overdue_fee and extension_fee calcul
 
 =head1 SYNOPSIS
 
+대여비: 의류대여비 - 할인금액
+
     my $calc         = OpenCloset::Calculator::LateFee->new;
+    my $discount     = $calc->discount_price($order)  # 할인금액 총합
     my $overdue_days = $calc->overdue_days($order);   # 연체일: 오늘 - 반납희망일
     my $overdue_fee  = $calc->overdue_fee($order);    # 연체료: 대여비 * 연체일 * 0.3
     my $ext_days     = $calc->extension_days($order); # 연장일: 반납희망일 - 반납예정일
@@ -64,6 +67,25 @@ sub price {
     for ( $order->order_details ) {
         next unless $_->clothes;
         $price += $_->price;
+    }
+
+    my $discount = $self->discount_price($order);
+    return $price + $discount;
+}
+
+=head2 discount_price( $order )
+
+    my $discount = $self->discount_price($order);    # -10000
+
+=cut
+
+sub discount_price {
+    my ( $self, $order ) = @_;
+
+    my $price = 0;
+    my @details = $order->order_details( { name => { -in => ['3회 이상 대여 할인'] } } );
+    for my $od (@details) {
+        $price += $od->final_price;
     }
 
     return $price;
@@ -159,6 +181,10 @@ sub overdue_fee {
         $rate =~ s/%//;
         $rate /= 100;
         $days =~ s/일//;
+
+        my $discount = $self->discount_price($order);
+        $price += $discount;
+
         return $price * $rate * $days || 0;
     }
     else {
@@ -249,7 +275,7 @@ sub extension_days {
 sub extension_fee {
     my ( $self, $order, $today ) = @_;
 
-    if ( $order->status_id == $RETURNED ) {
+    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
         my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
         return 0 unless $od;
 
@@ -260,6 +286,10 @@ sub extension_fee {
         $rate =~ s/%//;
         $rate /= 100;
         $days =~ s/일//;
+
+        my $discount = $self->discount_price($order);
+        $price += $discount;
+
         return $price * $rate * $days || 0;
     }
     else {

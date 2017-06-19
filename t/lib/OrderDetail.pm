@@ -15,4 +15,9 @@ sub price {
     return 5000;
 }
 
+## using at discount_price
+sub final_price {
+    return 0;
+}
+
 1;
