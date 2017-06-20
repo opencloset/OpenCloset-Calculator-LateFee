@@ -1,5 +1,7 @@
 package OrderDetail;
 
+use Clothes;
+
 sub new {
     my $class = shift;
     my $self  = {};
@@ -8,7 +10,7 @@ sub new {
 }
 
 sub clothes {
-    return 1;
+    return Clothes->new;
 }
 
 sub price {
