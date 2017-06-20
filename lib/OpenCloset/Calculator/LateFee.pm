@@ -39,6 +39,8 @@ OpenCloset::Calculator::LateFee - late_fee, overdue_fee and extension_fee calcul
 =cut
 
 our $DAY_AS_SECONDS = 60 * 60 * 24;
+our $EXTENSION_RATE = 0.2;
+our $OVERDUE_RATE   = 0.3;
 
 sub new {
     my ( $class, %args ) = @_;
@@ -162,7 +164,7 @@ sub overdue_days {
 
 =head2 overdue_fee( $order, $today? )
 
-    # 연체비 = 연체일 * 대여비 * 0.3
+    # 연체비 = 연체일 * 대여비 * $OVERDUE_RATE
     my $overdue_fee = $self->overdue_days($order);
 
 =cut
@@ -190,7 +192,7 @@ sub overdue_fee {
     else {
         my $price = $self->price($order);
         my $days = $self->overdue_days( $order, $today );
-        return $price * 0.3 * $days;
+        return $price * $OVERDUE_RATE * $days;
     }
 }
 
@@ -267,7 +269,7 @@ sub extension_days {
 
 =head2 extension_fee( $order, $today? )
 
-    # 연장비 = 연장일 * 대여비 * 0.2
+    # 연장비 = 연장일 * 대여비 * $EXTENSION_RATE
     my $extension_fee = $calc->extension_fee($order);
 
 =cut
@@ -295,7 +297,7 @@ sub extension_fee {
     else {
         my $price = $self->price($order);
         my $days = $self->extension_days( $order, $today );
-        return $price * 0.2 * $days;
+        return $price * $EXTENSION_RATE * $days;
     }
 }
 
