@@ -38,7 +38,7 @@ sub order_details {
         push @details, OrderDetail->new;
     }
 
-    return @details;
+    return wantarray ? @details : OrderDetail->new;
 }
 
 sub status_id { 1 }

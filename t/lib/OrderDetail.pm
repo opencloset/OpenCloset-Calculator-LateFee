@@ -22,4 +22,8 @@ sub final_price {
     return 0;
 }
 
+sub single {
+    return undef;
+}
+
 1;
