@@ -6,7 +6,7 @@ use warnings;
 use DateTime;
 use DateTime::Format::Strptime;
 
-use OpenCloset::Constants::Status qw/$RENTAL $RETURNED/;
+use OpenCloset::Constants::Status qw/$RENTAL $RETURNED $CHOOSE_CLOTHES $CHOOSE_ADDRESS $PAYMENT $PAYMENT_DONE $WAITING_DEPOSIT $PAYBACK/;
 
 =encoding utf8
 
@@ -66,13 +66,27 @@ sub price {
     return 0 unless $order;
 
     my $price = 0;
-    for ( $order->order_details ) {
-        next unless $_->clothes;
-        $price += $_->price;
+
+    ## 온라인의 경우 결제전에는 대여비를 계산해주어야 한다
+    my $status_id = $order->status_id;
+    if ( $order->online and "$CHOOSE_CLOTHES $CHOOSE_ADDRESS $PAYMENT $PAYMENT_DONE $WAITING_DEPOSIT $PAYBACK" =~ m/\b$status_id\b/ ) {
+        my $details = $order->order_details;
+        while ( my $detail = $details->next ) {
+            my $name = $detail->name;
+            next unless $name =~ m/^[a-z]/;
+
+            $price += $detail->price;
+        }
+    }
+    else {
+        for ( $order->order_details ) {
+            my $clothes = $_->clothes;
+            next unless $clothes;
+            $price += $clothes->price;
+        }
     }
 
-    my $discount = $self->discount_price($order);
-    return $price + $discount;
+    return $price;
 }
 
 =head2 discount_price( $order )
@@ -85,9 +99,36 @@ sub discount_price {
     my ( $self, $order ) = @_;
 
     my $price = 0;
-    my @details = $order->order_details( { name => { -in => ['3회 이상 대여 할인'] } } );
-    for my $od (@details) {
-        $price += $od->final_price;
+    if ( $order->online ) {
+        my @details = $order->order_details( { name => { -in => ['3회 이상 대여 할인'] } } );
+        for my $od (@details) {
+            $price += $od->final_price;
+        }
+    }
+    else {
+        my @details = $order->order_details( { desc => { -like => '3회 이상 방문%' } } );
+        for my $od (@details) {
+            my $clothes = $od->clothes;
+            next unless $clothes;
+
+            my $od_price = $od->price;
+
+            if ($od_price) {
+                ## % 할인
+                $price = $price + $clothes->price - $od_price;
+            }
+            else {
+                ## 셋트 이외 무료
+                $price += $clothes->price;
+            }
+        }
+
+        $price *= -1;
+    }
+
+    my $detail = $order->order_details( { name => { -like => '%할인쿠폰' } }, { rows => 1 } )->single;
+    if ($detail) {
+        $price += $detail->price;
     }
 
     return $price;
@@ -190,7 +231,9 @@ sub overdue_fee {
         return $price * $rate * $days || 0;
     }
     else {
-        my $price = $self->price($order);
+        my $price    = $self->price($order);
+        my $discount = $self->discount_price($order);
+        $price += $discount;
         my $days = $self->overdue_days( $order, $today );
         return $price * $OVERDUE_RATE * $days;
     }
@@ -208,14 +251,19 @@ sub extension_days {
     my ( $self, $order, $today ) = @_;
     return 0 unless $order;
 
-    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
-        return 0 unless $od;
+    if ( !$self->{ignore} ) {
+        my $additional_day = $order->additional_day;
+        return $additional_day if $additional_day;
 
-        my $desc = $od->desc;
-        my ( $price, $rate, $days ) = split / x /, $desc;
-        $days =~ s/일//;
-        return $days || 0;
+        if ( $order->status_id == $RETURNED ) {
+            my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+            return 0 unless $od;
+
+            my $desc = $od->desc;
+            my ( $price, $rate, $days ) = split / x /, $desc;
+            $days =~ s/일//;
+            return $days || 0;
+        }
     }
 
     my $target_dt      = $order->target_date;
@@ -277,26 +325,37 @@ sub extension_days {
 sub extension_fee {
     my ( $self, $order, $today ) = @_;
 
-    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
-        return 0 unless $od;
+    if ( !$self->{ignore} ) {
+        if ( $order->status_id == $RETURNED ) {
+            my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+            return 0 unless $od;
 
-        my $desc = $od->desc;
-        my ( $price, $rate, $days ) = split / x /, $desc;
-        $price =~ s/,//;
-        $price =~ s/원//;
-        $rate =~ s/%//;
-        $rate /= 100;
-        $days =~ s/일//;
+            my $desc = $od->desc;
+            my ( $price, $rate, $days ) = split / x /, $desc;
+            $price =~ s/,//;
+            $price =~ s/원//;
+            $rate =~ s/%//;
+            $rate /= 100;
+            $days =~ s/일//;
 
-        my $discount = $self->discount_price($order);
-        $price += $discount;
+            my $discount = $self->discount_price($order);
+            $price += $discount;
 
-        return $price * $rate * $days || 0;
+            return $price * $rate * $days || 0;
+        }
+        else {
+            my $price    = $self->price($order);
+            my $discount = $self->discount_price($order);
+            my $days     = $self->extension_days( $order, $today );
+            $price += $discount;
+            return $price * $EXTENSION_RATE * $days;
+        }
     }
     else {
-        my $price = $self->price($order);
-        my $days = $self->extension_days( $order, $today );
+        my $price    = $self->price($order);
+        my $discount = $self->discount_price($order);
+        my $days     = $self->extension_days( $order, $today );
+        $price += $discount;
         return $price * $EXTENSION_RATE * $days;
     }
 }
