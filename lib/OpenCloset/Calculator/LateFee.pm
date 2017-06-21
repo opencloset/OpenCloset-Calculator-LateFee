@@ -251,19 +251,14 @@ sub extension_days {
     my ( $self, $order, $today ) = @_;
     return 0 unless $order;
 
-    if ( !$self->{ignore} ) {
-        my $additional_day = $order->additional_day;
-        return $additional_day if $additional_day;
+    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
+        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+        return 0 unless $od;
 
-        if ( $order->status_id == $RETURNED ) {
-            my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
-            return 0 unless $od;
-
-            my $desc = $od->desc;
-            my ( $price, $rate, $days ) = split / x /, $desc;
-            $days =~ s/일//;
-            return $days || 0;
-        }
+        my $desc = $od->desc;
+        my ( $price, $rate, $days ) = split / x /, $desc;
+        $days =~ s/일//;
+        return $days || 0;
     }
 
     my $target_dt      = $order->target_date;
