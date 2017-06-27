@@ -126,7 +126,8 @@ sub discount_price {
         $price *= -1;
     }
 
-    my $detail = $order->order_details( { name => { -like => '%할인쿠폰' } }, { rows => 1 } )->single;
+    ## n% 할인쿠폰
+    my $detail = $order->order_details( { name => { -like => '%\% 할인쿠폰' } }, { rows => 1 } )->single;
     if ($detail) {
         $price += $detail->price;
     }
