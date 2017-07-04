@@ -58,15 +58,19 @@ sub new {
 
     my $price = $self->price($order);    # 20000
 
+B<최종대여가격|대여가격> 이 아닌 B<정상금액>입니다.
+
+    정상금액 = 대여 의류 품목 가격의 합
+    할인금액 = (의류품목 가격 - 대여항목 가격)의 합 + 할인항목의 가격의 합
+    최종대여가격(대여가격) = 정상금액 - 할인금액
+
 =cut
 
 sub price {
     my ( $self, $order ) = @_;
-
     return 0 unless $order;
 
     my $price = 0;
-
     ## 온라인의 경우 결제전에는 대여비를 계산해주어야 한다
     my $status_id = $order->status_id;
     if ( $order->online and "$CHOOSE_CLOTHES $CHOOSE_ADDRESS $PAYMENT $PAYMENT_DONE $WAITING_DEPOSIT $PAYBACK" =~ m/\b$status_id\b/ ) {
@@ -79,9 +83,10 @@ sub price {
         }
     }
     else {
-        for ( $order->order_details ) {
-            my $clothes = $_->clothes;
-            next unless $clothes;
+        my @details = $order->order_details( { stage => 0, clothes_code => { '!=' => undef } } );
+        ## 대여금액이 아닌 정상금액을 계산하는 것이므로 clothes.price 의 합을 구한다
+        for my $detail (@details) {
+            my $clothes = $detail->clothes;
             $price += $clothes->price;
         }
     }
@@ -97,53 +102,32 @@ sub price {
 
 sub discount_price {
     my ( $self, $order ) = @_;
+    return 0 unless $order;
 
-    my $price = 0;
-    if ( $order->online ) {
-        my @details = $order->order_details( { name => { -in => ['3회 이상 대여 할인'] } } );
-        for my $od (@details) {
-            $price += $od->final_price;
-        }
-    }
-    else {
-        my @details = $order->order_details( { desc => { -like => '3회 이상 방문%' } } );
-        for my $od (@details) {
-            my $clothes = $od->clothes;
-            next unless $clothes;
-
-            my $od_price = $od->price;
-
-            if ($od_price) {
-                ## % 할인
-                $price = $price + $clothes->price - $od_price;
-            }
-            else {
-                ## 셋트 이외 무료
-                $price += $clothes->price;
-            }
-        }
-
-        $price *= -1;
-    }
-
-    ## 단벌 할인쿠폰 X
-    ## 30% 할인쿠폰 O
-    ## 10,000원 할인쿠폰 O
-    my $detail = $order->order_details(
+    my $price   = 0;
+    my @details = $order->order_details(
         {
             -or => [
+                desc => { -like => '3회 이상 방문%' },
+                name => { -in   => ['3회 이상 대여 할인'] },
                 name => { -like => '%\% 할인쿠폰' },
                 name => { -like => '%원 할인쿠폰' },
             ]
-        },
-        { rows => 1 }
-    )->single;
+        }
+    );
 
-    if ($detail) {
-        $price += $detail->price;
+    for my $detail (@details) {
+        if ( my $clothes = $detail->clothes ) {
+            ## 의류품목의 가격과 항목의 가격의 차액의 합
+            $price += $clothes->price - $detail->price;
+        }
+        else {
+            ## 할인항목의 가격의 합
+            $price += $detail->price;
+        }
     }
 
-    return $price;
+    return $price * -1;
 }
 
 =head2 overdue_days( $order, $today? )
