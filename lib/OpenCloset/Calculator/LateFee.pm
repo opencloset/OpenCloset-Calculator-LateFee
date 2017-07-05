@@ -130,6 +130,31 @@ sub discount_price {
     return $price;
 }
 
+=head2 rental_price( $order )
+
+대여금액 = 정상금액 - 할인금액
+
+    my $rental_price = $calc->rental_price($order);    # 20000
+
+=cut
+
+sub rental_price {
+    my ( $self, $order ) = @_;
+    return 0 unless $order;
+
+    my $price  = $self->price($order);
+    my $coupon = $order->coupon;
+    if ( $coupon and $coupon->type eq 'suit' ) {
+        ## suit type 쿠폰일때는 정상금액을 기준으로 계산
+        return $price;
+    }
+    else {
+        ## 이외에는 대여금액으로 계산: 대여금액 = 정상금액 - 할인금액
+        my $discount = $self->discount_price($order);
+        return $price + $discount;
+    }
+}
+
 =head2 overdue_days( $order, $today? )
 
 C<$today> means C<return_date>. default is today.
