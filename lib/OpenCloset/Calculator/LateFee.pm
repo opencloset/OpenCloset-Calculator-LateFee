@@ -19,7 +19,7 @@ OpenCloset::Calculator::LateFee - late_fee, overdue_fee and extension_fee calcul
 대여비: 의류대여비 - 할인금액
 
     my $calc         = OpenCloset::Calculator::LateFee->new;
-    my $discount     = $calc->discount_price($order)  # 할인금액 총합
+    my $discount     = $calc->discount_price($order); # 할인금액 총합
     my $overdue_days = $calc->overdue_days($order);   # 연체일: 오늘 - 반납희망일
     my $overdue_fee  = $calc->overdue_fee($order);    # 연체료: 대여비 * 연체일 * 0.3
     my $ext_days     = $calc->extension_days($order); # 연장일: 반납희망일 - 반납예정일
@@ -107,7 +107,8 @@ sub discount_price {
     my $price   = 0;
     my @details = $order->order_details(
         {
-            -or => [
+            stage => 0,
+            -or   => [
                 desc => { -like => '3회 이상 방문%' },
                 name => { -in   => ['3회 이상 대여 할인'] },
                 name => { -like => '%\% 할인쿠폰' },
@@ -146,7 +147,7 @@ sub overdue_days {
     return 0 unless $order;
 
     if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연체료' }, { rows => 1 } )->single;
+        my $od = $order->order_details( { name => '연체료', stage => 1 }, { rows => 1 } )->single;
         return 0 unless $od;
 
         my $desc = $od->desc;
@@ -210,7 +211,7 @@ sub overdue_fee {
     my ( $self, $order, $today ) = @_;
 
     if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연체료' }, { rows => 1 } )->single;
+        my $od = $order->order_details( { name => '연체료', stage => 1 }, { rows => 1 } )->single;
         return 0 unless $od;
 
         my $desc = $od->desc;
@@ -248,7 +249,7 @@ sub extension_days {
     return 0 unless $order;
 
     if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+        my $od = $order->order_details( { name => '연장료', stage => 1 }, { rows => 1 } )->single;
         return 0 unless $od;
 
         my $desc = $od->desc;
@@ -318,7 +319,7 @@ sub extension_fee {
 
     if ( !$self->{ignore} ) {
         if ( $order->status_id == $RETURNED ) {
-            my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+            my $od = $order->order_details( { name => '연장료', stage => 1 }, { rows => 1 } )->single;
             return 0 unless $od;
 
             my $desc = $od->desc;
