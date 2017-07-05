@@ -57,7 +57,21 @@ subtest 'normal' => sub {
     is( $price,    32_000, 'price' );
     is( $discount, 0,      'discount' );
 
-    ## TODO: 연체비/연장비
+    $api->boxed2payment($order);
+    $api->payment2rental($order);
+
+    my $target_date = $order->target_date;
+    my $user_target_date = $target_date->clone->add( days => 2 );
+    $order->update( { user_target_date => $user_target_date->datetime } );
+
+    my $return_date = $user_target_date->clone->add( days => 2 );
+    $api->rental2returned( $order, $return_date, { late_fee_pay_with => '미납' } );
+
+    my $extension_fee = $calc->extension_fee($order);
+    my $overdue_fee   = $calc->overdue_fee($order);
+    is( $extension_fee, 12_800, 'extension_fee' );
+    is( $overdue_fee,   19_200, 'overdue_fee' );
+
     ## TODO: 미납금
 };
 
