@@ -58,14 +58,14 @@ subtest 'normal' => sub {
     is( $discount, 0,      'discount' );
 
     $api->boxed2payment($order);
-    $api->payment2rental($order);
+    $api->payment2rental( $order, price_pay_with => '현금' );
 
     my $target_date = $order->target_date;
     my $user_target_date = $target_date->clone->add( days => 2 );
     $order->update( { user_target_date => $user_target_date->datetime } );
 
     my $return_date = $user_target_date->clone->add( days => 2 );
-    $api->rental2returned( $order, $return_date, { late_fee_pay_with => '미납' } );
+    $api->rental2returned( $order, return_date => $return_date, late_fee_pay_with => '미납' );
 
     my $extension_fee = $calc->extension_fee($order);
     my $overdue_fee   = $calc->overdue_fee($order);
