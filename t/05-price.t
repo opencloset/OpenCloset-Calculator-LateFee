@@ -8,7 +8,6 @@ use Test::More;
 use OpenCloset::Calculator::LateFee;
 use OpenCloset::Schema;
 
-use lib '/home/aanoaa/repo/opencloset/OpenCloset-API/lib';
 use OpenCloset::API::Order;
 
 use lib 't/lib';
