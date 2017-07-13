@@ -43,5 +43,6 @@ sub order_details {
 
 sub status_id { 1 }
 sub online    { 0 }
+sub coupon    { undef }
 
 1;

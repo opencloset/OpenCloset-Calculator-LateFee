@@ -19,7 +19,7 @@ OpenCloset::Calculator::LateFee - late_fee, overdue_fee and extension_fee calcul
 대여비: 의류대여비 - 할인금액
 
     my $calc         = OpenCloset::Calculator::LateFee->new;
-    my $discount     = $calc->discount_price($order)  # 할인금액 총합
+    my $discount     = $calc->discount_price($order); # 할인금액 총합
     my $overdue_days = $calc->overdue_days($order);   # 연체일: 오늘 - 반납희망일
     my $overdue_fee  = $calc->overdue_fee($order);    # 연체료: 대여비 * 연체일 * 0.3
     my $ext_days     = $calc->extension_days($order); # 연장일: 반납희망일 - 반납예정일
@@ -58,15 +58,19 @@ sub new {
 
     my $price = $self->price($order);    # 20000
 
+B<최종대여가격|대여가격> 이 아닌 B<정상금액>입니다.
+
+    정상금액 = 대여 의류 품목 가격의 합
+    할인금액 = (의류품목 가격 - 대여항목 가격)의 합 + 할인항목의 가격의 합
+    최종대여가격(대여가격) = 정상금액 - 할인금액
+
 =cut
 
 sub price {
     my ( $self, $order ) = @_;
-
     return 0 unless $order;
 
     my $price = 0;
-
     ## 온라인의 경우 결제전에는 대여비를 계산해주어야 한다
     my $status_id = $order->status_id;
     if ( $order->online and "$CHOOSE_CLOTHES $CHOOSE_ADDRESS $PAYMENT $PAYMENT_DONE $WAITING_DEPOSIT $PAYBACK" =~ m/\b$status_id\b/ ) {
@@ -79,9 +83,10 @@ sub price {
         }
     }
     else {
-        for ( $order->order_details ) {
-            my $clothes = $_->clothes;
-            next unless $clothes;
+        my @details = $order->order_details( { stage => 0, clothes_code => { '!=' => undef } } );
+        ## 대여금액이 아닌 정상금액을 계산하는 것이므로 clothes.price 의 합을 구한다
+        for my $detail (@details) {
+            my $clothes = $detail->clothes;
             $price += $clothes->price;
         }
     }
@@ -97,50 +102,54 @@ sub price {
 
 sub discount_price {
     my ( $self, $order ) = @_;
+    return 0 unless $order;
+
+    my $price   = 0;
+    my @details = $order->order_details(
+        {
+            stage => 0,
+            -or   => [
+                desc => { -like => '3회 이상 방문%' },
+                name => { -in   => ['3회 이상 대여 할인'] },
+                name => { -like => '%할인쿠폰' },
+            ]
+        }
+    );
+
+    for my $detail (@details) {
+        if ( my $clothes = $detail->clothes ) {
+            ## 의류품목의 가격과 항목의 가격의 차액의 합
+            $price += $detail->price - $clothes->price;
+        }
+        else {
+            ## 할인항목의 가격의 합
+            $price += $detail->price;
+        }
+    }
+
+    return $price;
+}
+
+=head2 rental_price( $order )
+
+대여금액(결제금액)
+연장/연체일 등을 고려하지 않습니다.
+에누리 금액이 포함됩니다.
+
+이것을 기준으로 연장비/연체비가 계산되어서는 안됩니다.
+
+    my $rental_price = $calc->rental_price($order);    # 20000
+
+=cut
+
+sub rental_price {
+    my ( $self, $order ) = @_;
+    return 0 unless $order;
 
     my $price = 0;
-    if ( $order->online ) {
-        my @details = $order->order_details( { name => { -in => ['3회 이상 대여 할인'] } } );
-        for my $od (@details) {
-            $price += $od->final_price;
-        }
-    }
-    else {
-        my @details = $order->order_details( { desc => { -like => '3회 이상 방문%' } } );
-        for my $od (@details) {
-            my $clothes = $od->clothes;
-            next unless $clothes;
-
-            my $od_price = $od->price;
-
-            if ($od_price) {
-                ## % 할인
-                $price = $price + $clothes->price - $od_price;
-            }
-            else {
-                ## 셋트 이외 무료
-                $price += $clothes->price;
-            }
-        }
-
-        $price *= -1;
-    }
-
-    ## 단벌 할인쿠폰 X
-    ## 30% 할인쿠폰 O
-    ## 10,000원 할인쿠폰 O
-    my $detail = $order->order_details(
-        {
-            -or => [
-                name => { -like => '%\% 할인쿠폰' },
-                name => { -like => '%원 할인쿠폰' },
-            ]
-        },
-        { rows => 1 }
-    )->single;
-
-    if ($detail) {
-        $price += $detail->price;
+    my $details = $order->order_details( { stage => 0 }, undef );
+    while ( my $detail = $details->next ) {
+        $price += $detail->final_price;
     }
 
     return $price;
@@ -162,7 +171,7 @@ sub overdue_days {
     return 0 unless $order;
 
     if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연체료' }, { rows => 1 } )->single;
+        my $od = $order->order_details( { name => '연체료', stage => 1 }, { rows => 1 } )->single;
         return 0 unless $od;
 
         my $desc = $od->desc;
@@ -226,7 +235,7 @@ sub overdue_fee {
     my ( $self, $order, $today ) = @_;
 
     if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연체료' }, { rows => 1 } )->single;
+        my $od = $order->order_details( { name => '연체료', stage => 1 }, { rows => 1 } )->single;
         return 0 unless $od;
 
         my $desc = $od->desc;
@@ -237,16 +246,22 @@ sub overdue_fee {
         $rate /= 100;
         $days =~ s/일//;
 
-        my $discount = $self->discount_price($order);
-        $price += $discount;
-
         return $price * $rate * $days || 0;
     }
     else {
         my $price    = $self->price($order);
         my $discount = $self->discount_price($order);
-        $price += $discount;
-        my $days = $self->overdue_days( $order, $today );
+        my $days     = $self->overdue_days( $order, $today );
+
+        my $coupon = $order->coupon;
+        if ( $coupon and $coupon->type eq 'suit' ) {
+            ## suit type 쿠폰일때는 정상금액을 기준으로 계산
+        }
+        else {
+            ## 이외에는 대여금액으로 계산: 대여금액 = 정상금액 - 할인금액
+            $price += $discount;
+        }
+
         return $price * $OVERDUE_RATE * $days;
     }
 }
@@ -264,7 +279,7 @@ sub extension_days {
     return 0 unless $order;
 
     if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
-        my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
+        my $od = $order->order_details( { name => '연장료', stage => 1 }, { rows => 1 } )->single;
         return 0 unless $od;
 
         my $desc = $od->desc;
@@ -332,37 +347,34 @@ sub extension_days {
 sub extension_fee {
     my ( $self, $order, $today ) = @_;
 
-    if ( !$self->{ignore} ) {
-        if ( $order->status_id == $RETURNED ) {
-            my $od = $order->order_details( { name => '연장료' }, { rows => 1 } )->single;
-            return 0 unless $od;
+    if ( !$self->{ignore} && $order->status_id == $RETURNED ) {
+        my $od = $order->order_details( { name => '연장료', stage => 1 }, { rows => 1 } )->single;
+        return 0 unless $od;
 
-            my $desc = $od->desc;
-            my ( $price, $rate, $days ) = split / x /, $desc;
-            $price =~ s/,//;
-            $price =~ s/원//;
-            $rate =~ s/%//;
-            $rate /= 100;
-            $days =~ s/일//;
+        my $desc = $od->desc;
+        my ( $price, $rate, $days ) = split / x /, $desc;
+        $price =~ s/,//;
+        $price =~ s/원//;
+        $rate =~ s/%//;
+        $rate /= 100;
+        $days =~ s/일//;
 
-            my $discount = $self->discount_price($order);
-            $price += $discount;
-
-            return $price * $rate * $days || 0;
-        }
-        else {
-            my $price    = $self->price($order);
-            my $discount = $self->discount_price($order);
-            my $days     = $self->extension_days( $order, $today );
-            $price += $discount;
-            return $price * $EXTENSION_RATE * $days;
-        }
+        return $price * $rate * $days || 0;
     }
     else {
         my $price    = $self->price($order);
         my $discount = $self->discount_price($order);
         my $days     = $self->extension_days( $order, $today );
-        $price += $discount;
+
+        my $coupon = $order->coupon;
+        if ( $coupon and $coupon->type eq 'suit' ) {
+            ## suit type 쿠폰일때는 정상금액을 기준으로 계산
+        }
+        else {
+            ## 이외에는 대여금액으로 계산: 대여금액 = 정상금액 - 할인금액
+            $price += $discount;
+        }
+
         return $price * $EXTENSION_RATE * $days;
     }
 }
