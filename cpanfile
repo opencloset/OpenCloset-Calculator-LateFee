@@ -9,5 +9,5 @@ on 'test' => sub {
     requires 'Test::More';
 
     # cpan.theopencloset.net
-    requires 'OpenCloset::Calculator::LateFee';
+    requires 'OpenCloset::API::Order';
 };
